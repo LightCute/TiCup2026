@@ -224,6 +224,10 @@ HTML = """<!DOCTYPE html>
             recStream = null;
         }
         canvas.style.display = 'none';
+        // 录制时流一直在工作，直接恢复在线状态，避免下载对话框阻塞导致心跳误判
+        alive = true;
+        dot.className = 'dot live';
+        st.textContent = '推流中';
         updateRecUI();
     });
 
