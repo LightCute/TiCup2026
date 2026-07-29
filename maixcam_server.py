@@ -167,10 +167,12 @@ HTML = """<!DOCTYPE html>
         canvas.height = img.naturalHeight || """ + str(HEIGHT) + """;
         canvas.style.display = 'block';
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        lastFrameTime = Date.now();  // 录制期间用 drawLoop 维持心跳
 
         drawLoop = setInterval(function() {
             if (img.complete && img.naturalWidth > 0) {
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                lastFrameTime = Date.now();  // 每帧都更新，绝不断流误判
             }
         }, 33);
 
@@ -248,9 +250,9 @@ HTML = """<!DOCTYPE html>
         }, 2000);
     }
 
-    // 断流检测：超过 5 秒没有新帧则判定为断流
+    // 断流检测：超过 10 秒没有新帧/绘制则判定为断流
     setInterval(function() {
-        if (lastFrameTime > 0 && Date.now() - lastFrameTime > 5000) {
+        if (lastFrameTime > 0 && Date.now() - lastFrameTime > 10000) {
             if (dot.classList.contains('live')) {
                 dot.className = 'dot';
                 st.textContent = '重新连接…';
