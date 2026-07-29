@@ -6,13 +6,7 @@ MaixCam 作为 HTTP 服务器推流，同一局域网下的电脑/手机浏览�
 
 ### 1. 获取 MaixCam IP 地址
 
-MaixCam 连接手机热点或 WiFi 后，在 MaixCam 终端查看 IP：
-
-```python
-import network
-wlan = network.WLAN(network.STA_IF)
-print(wlan.ifconfig()[0])   # 例如 192.168.1.100
-```
+MaixCam 在设置中连接手机热点或 WiFi，连接成功后可直接在设置界面查看 IP 地址（例如 `192.168.1.100`）。
 
 ### 2. 启动推流
 
