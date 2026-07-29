@@ -136,6 +136,7 @@ HTML = """<!DOCTYPE html>
     // ── 录制状态 ──
     let recording = false;
     let recorder = null;
+    let recStream = null;
     let recChunks = [];
     let recStartTime = null;
     let recTimer = null;
@@ -178,12 +179,12 @@ HTML = """<!DOCTYPE html>
         }, 33); // ~30fps
 
         // 启动 MediaRecorder
-        var stream = canvas.captureStream(30);
+        recStream = canvas.captureStream(30);
         var mime = 'video/webm; codecs=vp8';
         if (!MediaRecorder.isTypeSupported(mime)) {
             mime = 'video/webm';
         }
-        recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2500000 });
+        recorder = new MediaRecorder(recStream, { mimeType: mime, videoBitsPerSecond: 2500000 });
         recChunks = [];
 
         recorder.ondataavailable = function(e) {
@@ -217,7 +218,11 @@ HTML = """<!DOCTYPE html>
         if (recorder && recorder.state === 'recording') {
             recorder.stop();
         }
-        // 恢复 img 显示
+        // 释放旧流，确保下次 captureStream() 返回新流
+        if (recStream) {
+            recStream.getTracks().forEach(function(t) { t.stop(); });
+            recStream = null;
+        }
         canvas.style.display = 'none';
         updateRecUI();
     });
