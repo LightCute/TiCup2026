@@ -111,7 +111,7 @@ HTML = """<!DOCTYPE html>
     </div>
 
     <div class="viewer" id="viewer">
-        <img id="stream" src="/stream" alt="MJPEG Stream"
+        <img id="stream" alt="MJPEG Stream"
              onload="onFrame()" onerror="onErr()">
         <canvas id="canvas"></canvas>
     </div>
@@ -130,8 +130,10 @@ HTML = """<!DOCTYPE html>
     const btnStart= document.getElementById('btnRecStart');
     const btnStop = document.getElementById('btnRecStop');
 
-    let alive = false;
-    let retryTimer = null;
+    //页面加载完后再连流，避免浏览器加载圈不停
+    window.addEventListener('load', function() {
+        setTimeout(function() { img.src = '/stream'; }, 100);
+    });
 
     // ── 录制状态 ──
     let recording = false;
@@ -139,7 +141,6 @@ HTML = """<!DOCTYPE html>
     let recStream = null;
     let recChunks = [];
     let recStartTime = null;
-    let recTimer = null;
     let drawLoop = null;
 
     function updateRecUI() {
@@ -161,50 +162,38 @@ HTML = """<!DOCTYPE html>
     // ── 开始录制 ──
     btnStart.addEventListener('click', function() {
         if (recording) return;
-        if (!alive) { alert('请等待视频流连接后再录制'); return; }
 
-        // 初始化 Canvas
         canvas.width = img.naturalWidth || """ + str(WIDTH) + """;
         canvas.height = img.naturalHeight || """ + str(HEIGHT) + """;
         canvas.style.display = 'block';
-
-        // 绘制首帧
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        // 持续绘制
         drawLoop = setInterval(function() {
             if (img.complete && img.naturalWidth > 0) {
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             }
-        }, 33); // ~30fps
+        }, 33);
 
-        // 启动 MediaRecorder
         recStream = canvas.captureStream(30);
         var mime = 'video/webm; codecs=vp8';
-        if (!MediaRecorder.isTypeSupported(mime)) {
-            mime = 'video/webm';
-        }
+        if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
         recorder = new MediaRecorder(recStream, { mimeType: mime, videoBitsPerSecond: 2500000 });
         recChunks = [];
 
         recorder.ondataavailable = function(e) {
             if (e.data && e.data.size > 0) recChunks.push(e.data);
         };
-
         recorder.onstop = function() {
             var blob = new Blob(recChunks, { type: mime });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
             var ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-            a.href = url;
-            a.download = 'record_' + ts + '.webm';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            a.href = url; a.download = 'record_' + ts + '.webm';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
         };
 
-        recorder.start(1000); // 每秒一个 dataavailable 事件
+        recorder.start(1000);
         recording = true;
         recStartTime = Date.now();
         updateRecUI();
@@ -215,19 +204,13 @@ HTML = """<!DOCTYPE html>
         if (!recording) return;
         recording = false;
         if (drawLoop) { clearInterval(drawLoop); drawLoop = null; }
-        if (recorder && recorder.state === 'recording') {
-            recorder.stop();
-        }
-        // 释放旧流，确保下次 captureStream() 返回新流
+        if (recorder && recorder.state === 'recording') recorder.stop();
         if (recStream) {
             recStream.getTracks().forEach(function(t) { t.stop(); });
             recStream = null;
         }
         canvas.style.display = 'none';
-        // 录制时流一直在工作，直接恢复在线状态，避免下载对话框阻塞导致心跳误判
-        alive = true;
-        dot.className = 'dot live';
-        st.textContent = '推流中';
+        // 录制期间 img 一直在加载帧，onFrame 持续触发，状态无需改动
         updateRecUI();
     });
 
@@ -239,17 +222,19 @@ HTML = """<!DOCTYPE html>
         recDur.textContent = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
     }, 500);
 
-    // ── 流回调 ──
+    // ── 流状态追踪（基于帧时间戳，不靠 flag 切换）──
+    let lastFrameTime = 0;
+    let retryTimer = null;
+
     function onFrame() {
-        if (!alive) {
-            alive = true;
+        lastFrameTime = Date.now();
+        if (!dot.classList.contains('live')) {
             dot.className = 'dot live';
             st.textContent = '推流中';
         }
     }
 
     function onErr() {
-        alive = false;
         dot.className = 'dot';
         st.textContent = '等待推流…';
         scheduleRetry();
@@ -263,14 +248,16 @@ HTML = """<!DOCTYPE html>
         }, 2000);
     }
 
-    // 心跳
+    // 断流检测：超过 5 秒没有新帧则判定为断流
     setInterval(function() {
-        if (alive) { alive = false; }
-        else if (dot.classList.contains('live')) {
-            dot.className = 'dot';
-            st.textContent = '重新连接…';
+        if (lastFrameTime > 0 && Date.now() - lastFrameTime > 5000) {
+            if (dot.classList.contains('live')) {
+                dot.className = 'dot';
+                st.textContent = '重新连接…';
+                scheduleRetry();
+            }
         }
-    }, 3000);
+    }, 2000);
 
     // 双击全屏
     viewer.addEventListener('dblclick', function() {
