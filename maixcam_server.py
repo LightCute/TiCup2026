@@ -252,7 +252,7 @@ HTML = """<!DOCTYPE html>
 
     // 断流检测：超过 10 秒没有新帧/绘制则判定为断流
     setInterval(function() {
-        if (lastFrameTime > 0 && Date.now() - lastFrameTime > 10000) {
+        if (lastFrameTime > 0 && Date.now() - lastFrameTime > 30000) {
             if (dot.classList.contains('live')) {
                 dot.className = 'dot';
                 st.textContent = '重新连接…';
